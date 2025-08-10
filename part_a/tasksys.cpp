@@ -1,5 +1,5 @@
 #include "tasksys.h"
-
+#include <atomic>
 
 IRunnable::~IRunnable() {}
 
@@ -48,7 +48,7 @@ const char* TaskSystemParallelSpawn::name() {
     return "Parallel + Always Spawn";
 }
 
-TaskSystemParallelSpawn::TaskSystemParallelSpawn(int num_threads): ITaskSystem(num_threads) {
+TaskSystemParallelSpawn::TaskSystemParallelSpawn(int num_threads): ITaskSystem(num_threads), num_threads(num_threads) {
     //
     // TODO: CS149 student implementations may decide to perform setup
     // operations (such as thread pool construction) here.
@@ -68,9 +68,19 @@ void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
     // tasks sequentially on the calling thread.
     //
 
-    for (int i = 0; i < num_total_tasks; i++) {
-        runnable->runTask(i, num_total_tasks);
-    }
+    const int T = std::max(1, std::min(num_total_tasks, num_threads));
+
+    auto workFn = [&](int taskId) {
+        runnable->runTask(taskId, T);
+    };
+    
+    std::vector<std::thread> workers; // Vector to hold threads
+    workers.reserve(T-1); // Reserve space for threads
+
+    for (int i = 1; i < T; i++) workers.emplace_back(workFn, i);
+    workFn(0);
+
+    for (auto& worker: workers) worker.join();    
 }
 
 TaskID TaskSystemParallelSpawn::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
