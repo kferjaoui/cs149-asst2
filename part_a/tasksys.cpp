@@ -61,24 +61,24 @@ TaskSystemParallelSpawn::~TaskSystemParallelSpawn() {}
 
 void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
 
-
-    //
-    // TODO: CS149 students will modify the implementation of this
-    // method in Part A.  The implementation provided below runs all
-    // tasks sequentially on the calling thread.
-    //
-
     const int T = std::max(1, std::min(num_total_tasks, num_threads));
 
-    auto workFn = [&](int taskId) {
-        runnable->runTask(taskId, T);
+    std::atomic<int> next;
+    next.store(0);
+
+    auto workFn = [&]() {
+        for (;;){
+            int taskId = next.fetch_add(1);
+            if (taskId >= num_total_tasks) break;
+            runnable->runTask(taskId, num_total_tasks);  
+        }
     };
     
     std::vector<std::thread> workers; // Vector to hold threads
     workers.reserve(T-1); // Reserve space for threads
 
-    for (int i = 1; i < T; i++) workers.emplace_back(workFn, i);
-    workFn(0);
+    for (int i = 1; i < T; i++) workers.emplace_back(workFn);
+    workFn(); //call from main thread 
 
     for (auto& worker: workers) worker.join();    
 }
